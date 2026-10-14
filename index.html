@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calculateur d'altimétrie des massifs</title>
+<style>
+:root{--green:#19734a;--pale:#eaf5ef;--ink:#17211b;--muted:#64716a;--line:#d9e2dc;--bg:#f5f7f5;--red:#b83b35;--blue:#225e9e}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{background:#163e2c;color:white;padding:22px max(18px,calc((100vw - 1100px)/2));}
+header h1{font-size:clamp(22px,4vw,30px);margin:0 0 5px}header p{margin:0;color:#dcebe2}
+main{max-width:1100px;margin:22px auto;padding:0 16px 50px}.card{background:white;border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 2px 8px #173b2610}
+h2{font-size:19px;margin:0 0 12px}h3{font-size:16px;margin:0 0 8px}.muted{color:var(--muted);font-size:13px}.mode{display:grid;grid-template-columns:1fr 1fr;gap:12px}.mode button{padding:18px;text-align:left;border:1px solid var(--line);background:white;border-radius:12px;cursor:pointer}.mode button.active{border:2px solid var(--green);background:var(--pale)}.mode strong{display:block;font-size:17px;margin-bottom:4px}
+button,.filelabel{font:inherit;cursor:pointer;border-radius:9px;padding:9px 13px;border:1px solid var(--line);background:white;color:var(--ink)}button.primary{background:var(--green);border-color:var(--green);color:white}button.danger{color:var(--red)}button:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.field{display:flex;flex-direction:column;gap:5px;min-width:110px;flex:1}.field label{font-size:13px;color:var(--muted)}input,select{font:inherit;padding:9px 10px;border:1px solid #cbd6ce;border-radius:8px;min-width:0;width:100%;background:white}input[type=number]{max-width:160px}.hidden{display:none!important}
+.gridwrap{overflow:auto}.measure-table{border-collapse:collapse;width:100%;min-width:520px}.measure-table th,.measure-table td{border-bottom:1px solid var(--line);padding:8px;text-align:left}.measure-table th{font-size:12px;color:var(--muted);font-weight:600}.measure-table input{width:100%;max-width:none}.pill{display:inline-block;border-radius:30px;background:#eef1ef;padding:3px 8px;font-size:12px}.pill.ok{background:#e0f4e7;color:#17683d}.pill.warn{background:#fff0dc;color:#84500a}
+.planwrap{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:14px}.plan{position:relative;min-height:370px;border:1px dashed #9cafa3;border-radius:12px;background:repeating-linear-gradient(0deg,#fff,#fff 39px,#edf1ee 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,#edf1ee 40px);overflow:hidden;touch-action:manipulation}.plan svg{width:100%;height:100%;min-height:370px;display:block}.footing{cursor:pointer}.footing circle{fill:#e3f2e9;stroke:#19734a;stroke-width:2}.footing.selected circle{fill:#19734a;stroke:#0c4b2d}.footing text{font-size:10px;fill:#143b28;text-anchor:middle;pointer-events:none}.footing.selected text{fill:white}.footing .val{font-size:9px;fill:#324b3c}.footing.selected .val{fill:white}
+.resultgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.metric{padding:13px;border:1px solid var(--line);border-radius:10px}.metric .n{font-size:25px;font-weight:750}.metric .l{font-size:12px;color:var(--muted)}
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:12px}.solution{border:1px solid var(--line);border-radius:12px;padding:14px}.solution.best{border:2px solid var(--green);background:#f7fcf8}.solution h3{display:flex;justify-content:space-between;gap:8px;align-items:center}.total{font-size:28px;font-weight:800}.shims{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.shim{border-radius:8px;padding:5px 8px;background:var(--pale);color:#175e3b;font-size:13px}.notice{background:#fff7e8;border:1px solid #eed4a4;padding:11px;border-radius:9px;color:#6e4a10;font-size:13px}
+@media(max-width:700px){main{margin:12px auto}.card{padding:14px}.mode,.compare,.planwrap{grid-template-columns:1fr}.resultgrid{grid-template-columns:1fr 1fr}.plan{min-height:300px}.plan svg{min-height:300px}}
+</style>
+</head>
+<body>
+<header><h1>Calculateur d'altimétrie des massifs</h1><p>Relevé des hauteurs · comparaison des zéros · optimisation des cales</p></header>
+<main>
+<section class="card">
+<h2>1. Choisir le mode de saisie</h2>
+<div class="mode">
+<button id="modePlan" class="active" onclick="setMode('plan')"><strong>▦ Plan</strong><span class="muted">Placer les massifs librement sur un schéma.</span></button>
+<button id="modeTable" onclick="setMode('table')"><strong>☷ Tableau</strong><span class="muted">Créer des rangées et saisir les écarts.</span></button>
+</div>
+<p class="muted" style="margin-bottom:0">Les données sont conservées dans cette page tant qu'elle reste ouverte. Utilise l'export projet pour les sauvegarder.</p>
+</section>
+<section class="card">
+<h2>2. Configurer les massifs</h2>
+<div id="tableConfig">
+<div class="row">
+<div class="field"><label>Nombre de rangées</label><input id="rows" type="number" min="1" max="30" value="3"></div>
+<div class="field"><label>Massifs par rangée (ex. 4,6,4)</label><input id="counts" value="4,6,4" placeholder="4,6,4"></div>
+<button class="primary" onclick="generateGrid()">Générer les massifs</button>
+</div>
+<p class="muted">Chaque rangée peut avoir un nombre différent de massifs. Ensuite, tu peux ajouter ou supprimer des massifs individuellement.</p>
+</div>
+<div id="planConfig" class="hidden">
+<div class="row">
+<button class="primary" onclick="addFooting()">＋ Ajouter un massif</button>
+<button onclick="resetPositions()">Répartir sur le plan</button>
+<label class="filelabel">Importer un plan image/PDF <input id="planFile" type="file" accept="image/*,.pdf" style="display:none" onchange="loadPlanFile(event)"></label>
+</div>
+<p class="muted">Clique sur un massif pour le sélectionner, puis clique sur le plan pour le déplacer. Pour un PDF, cette première version ne l'affiche pas directement : utilise une image exportée du plan comme fond.</p>
+</div>
+</section>
+<section class="card">
+<h2>3. Saisir les mesures</h2>
+<p class="muted">Les écarts sont en millimètres par rapport au zéro terrain choisi. Une valeur positive indique un massif plus haut ; une valeur négative, plus bas.</p>
+<div class="row" style="margin-bottom:12px">
+<div class="field"><label>Massif pris comme zéro terrain</label><select id="zeroSelect" onchange="renderAll()"></select></div>
+<div class="field"><label>Recherche du zéro optimisé jusqu'à (mm au-dessus du point le plus haut)</label><input id="searchRange" type="number" min="0" max="100" value="10"></div>
+</div>
+<div id="tableEditor" class="gridwrap"></div>
+</section>
+<section class="card">
+<h2>4. Implantation</h2>
+<div class="planwrap">
+<div id="planCanvas" class="plan"><svg id="planSvg" viewBox="0 0 600 360" role="img" aria-label="Schéma des massifs"></svg></div>
+<div>
+<h3>Massif sélectionné</h3>
+<div class="field"><label>Identifiant</label><input id="editId" placeholder="M1" oninput="editSelected('id',this.value)"></div>
+<div class="field" style="margin-top:8px"><label>Écart mesuré (mm)</label><input id="editDelta" type="number" step="1" oninput="editSelected('delta',this.value)"></div>
+<div class="row" style="margin-top:10px"><button onclick="addFooting()">＋ Ajouter</button><button class="danger" onclick="removeSelected()">Supprimer</button></div>
+<p class="muted">En mode Plan, clique sur un massif puis sur une nouvelle position dans la zone pour le déplacer.</p>
+</div>
+</div>
+</section>
+<section class="card">
+<h2>5. Comparer les solutions</h2>
+<div id="results"><p class="muted">Ajoute au moins un massif et renseigne ses mesures pour afficher le calcul.</p></div>
+<div class="row" style="margin-top:14px">
+<button class="primary" onclick="exportCSV()">Exporter le récapitulatif CSV</button>
+<button onclick="exportProject()">Sauvegarder le projet JSON</button>
+<label class="filelabel">Importer projet JSON <input type="file" accept=".json,application/json" style="display:none" onchange="importProject(event)"></label>
+<button onclick="window.print()">Imprimer / PDF</button>
+</div>
+</section>
+<section class="card notice">
+<strong>Important — validation chantier :</strong> ce prototype optimise mathématiquement le nombre de cales à partir des épaisseurs disponibles de 1, 2 et 5 mm. Il suppose que les cales peuvent être empilées et qu'aucune limite d'épaisseur n'est imposée. Vérifie les règles de montage, les prescriptions du fabricant et la validation du responsable avant d'appliquer le résultat sur chantier.
+</section>
+</main>
+<script>
+let mode='plan', selectedId=null, footings=[], nextId=1, backgroundImage=null;
+function newFooting(x=50,y=50,delta=0,id=null){return {id:id||'M'+nextId++,x,y,delta:Number(delta)||0};}
+function setMode(m){mode=m;document.getElementById('modePlan').classList.toggle('active',m==='plan');document.getElementById('modeTable').classList.toggle('active',m==='table');document.getElementById('planConfig').classList.toggle('hidden',m!=='plan');document.getElementById('tableConfig').classList.toggle('hidden',m!=='table');renderAll();}
+function generateGrid(){
+ const raw=document.getElementById('counts').value.split(',').map(x=>parseInt(x.trim(),10)).filter(x=>Number.isFinite(x)&&x>0&&x<=40);
+ if(!raw.length){alert('Indique le nombre de massifs par rangée, par exemple 4,6,4.');return;}
+ footings=[];nextId=1;let max= Math.max(...raw), totalRows=raw.length;
+ raw.forEach((count,r)=>{for(let c=0;c<count;c++){let x= max===1?50:15+(c/(Math.max(1,count-1)))*70;let y=totalRows===1?50:15+(r/(totalRows-1))*70;footings.push(newFooting(x,y,0));}});
+ selectedId=footings[0]?.id||null;renderAll();
+}
+function addFooting(){let f=newFooting(50+(Math.random()*10-5),50+(Math.random()*10-5),0);footings.push(f);selectedId=f.id;renderAll();}
+function removeSelected(){if(!selectedId)return;footings=footings.filter(f=>f.id!==selectedId);selectedId=footings[0]?.id||null;renderAll();}
+function resetPositions(){if(!footings.length)return;let cols=Math.ceil(Math.sqrt(footings.length)),rows=Math.ceil(footings.length/cols);footings.forEach((f,i)=>{f.x=cols===1?50:12+(i%cols)/(cols-1)*76;f.y=rows===1?50:12+Math.floor(i/cols)/(rows-1)*76;});renderAll();}
+function editSelected(k,v){let f=footings.find(x=>x.id===selectedId);if(!f)return;if(k==='delta')f.delta=Number(v)||0;else if(k==='id'){const old=f.id;f.id=(v||old).trim();if(!f.id)f.id=old;document.getElementById('zeroSelect').value=f.id;selectedId=f.id;}renderAll(false);}
+function loadPlanFile(e){let file=e.target.files?.[0];if(!file)return;if(file.type.startsWith('image/')){let r=new FileReader();r.onload=()=>{backgroundImage=r.result;document.getElementById('planSvg').style.backgroundImage=`url("${backgroundImage}")`;document.getElementById('planSvg').style.backgroundSize='contain';document.getElementById('planSvg').style.backgroundRepeat='no-repeat';document.getElementById('planSvg').style.backgroundPosition='center';};r.readAsDataURL(file);}else alert('Pour cette version, exporte la page PDF en image puis importe cette image.');}
+function renderAll(updateEditor=true){
+ const z=document.getElementById('zeroSelect'),old=z.value;z.innerHTML='';
+ footings.forEach(f=>{let o=document.createElement('option');o.value=f.id;o.textContent=f.id+' ('+(f.delta>=0?'+':'')+f.delta+' mm)';z.appendChild(o);});
+ if(footings.some(f=>f.id===old))z.value=old;else if(selectedId&&footings.some(f=>f.id===selectedId))z.value=selectedId;
+ if(!selectedId||!footings.some(f=>f.id===selectedId))selectedId=footings[0]?.id||null;
+ const editor=document.getElementById('tableEditor');
+ editor.innerHTML=footings.length?'<table class="measure-table"><thead><tr><th>Massif</th><th>Position X %</th><th>Position Y %</th><th>Écart (mm)</th><th></th></tr></thead><tbody>'+footings.map(f=>`<tr><td><input aria-label="Identifiant" value="${esc(f.id)}" onchange="changeF('${jsq(f.id)}','id',this.value)"></td><td><input type="number" min="0" max="100" value="${f.x}" onchange="changeF('${jsq(f.id)}','x',this.value)"></td><td><input type="number" min="0" max="100" value="${f.y}" onchange="changeF('${jsq(f.id)}','y',this.value)"></td><td><input type="number" step="1" value="${f.delta}" onchange="changeF('${jsq(f.id)}','delta',this.value)"></td><td><button class="danger" onclick="selectedId='${jsq(f.id)}';removeSelected()">×</button></td></tr>`).join('')+'</tbody></table>':'<p class="muted">Aucun massif. Génère une grille ou ajoute un massif.</p>';
+ const svg=document.getElementById('planSvg');svg.innerHTML='';
+ if(footings.length){
+   const points=footings.map(f=>`${f.x*6},${f.y*3.6}`).join(' ');
+   let poly=document.createElementNS('http://www.w3.org/2000/svg','polyline');poly.setAttribute('points',points);poly.setAttribute('fill','none');poly.setAttribute('stroke','#9ab4a2');poly.setAttribute('stroke-dasharray','4 5');poly.setAttribute('stroke-width','1.5');svg.appendChild(poly);
+   footings.forEach(f=>{let g=document.createElementNS('http://www.w3.org/2000/svg','g');g.setAttribute('class','footing'+(f.id===selectedId?' selected':''));g.setAttribute('transform',`translate(${f.x*6} ${f.y*3.6})`);g.innerHTML=`<circle r="11"></circle><text y="3">${esc(f.id.slice(0,7))}</text><text class="val" y="23">${f.delta>0?'+':''}${f.delta} mm</text>`;g.addEventListener('click',ev=>{ev.stopPropagation();selectedId=f.id;syncSelected();renderAll();});svg.appendChild(g);});
+ }
+ if(updateEditor)syncSelected();
+ calculate();
+}
+function syncSelected(){let f=footings.find(x=>x.id===selectedId);document.getElementById('editId').value=f?.id||'';document.getElementById('editDelta').value=f?.delta??'';}
+function changeF(id,k,v){let f=footings.find(x=>x.id===id);if(!f)return;if(k==='id'){if(footings.some(x=>x!==f&&x.id===v)){alert('Cet identifiant existe déjà.');renderAll();return;}let wasSelected=selectedId===id;f.id=v.trim()||id;if(wasSelected)selectedId=f.id;}else f[k]=Number(v)||0;renderAll();}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function jsq(s){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
+function coinCount(n){let rem=Math.max(0,Math.round(n)),out={5:0,2:0,1:0};out[5]=Math.floor(rem/5);rem%=5;out[2]=Math.floor(rem/2);rem%=2;out[1]=rem;return {pieces:out[5]+out[2]+out[1],out};}
+function calcAt(target){let pieces=0,all={5:0,2:0,1:0},rows=[];footings.forEach(f=>{let thickness=Math.max(0,Math.round(target-f.delta));let c=coinCount(thickness);pieces+=c.pieces;[5,2,1].forEach(k=>all[k]+=c.out[k]);rows.push({id:f.id,delta:f.delta,thickness,...c});});return {target,pieces,all,rows};}
+function calculate(){
+ const res=document.getElementById('results');if(!footings.length){res.innerHTML='<p class="muted">Ajoute au moins un massif pour calculer.</p>';return;}
+ const vals=footings.map(f=>Number(f.delta)||0),max=Math.max(...vals),zero=footings.find(f=>f.id===document.getElementById('zeroSelect').value)||footings[0];
+ // Terrain reference solution: keep current zero; relative readings are preserved. Common plane cannot be lower than highest massif.
+ const terrainTarget=max;
+ const range=Math.max(0,Math.min(100,Number(document.getElementById('searchRange').value)||0));
+ let candidates=[];for(let t=Math.round(max);t<=Math.round(max+range);t++)candidates.push(calcAt(t));
+ candidates.sort((a,b)=>a.pieces-b.pieces||a.target-b.target);const best=candidates[0],terrain=calcAt(terrainTarget);
+ function card(s,title,isBest){return `<div class="solution ${isBest?'best':''}"><h3>${title} ${isBest?'<span class="pill ok">Moins de pièces</span>':''}</h3><div class="muted">Niveau cible relatif au zéro terrain</div><div class="total">${s.target>0?'+':''}${s.target} mm</div><p><strong>${s.pieces} pièces</strong> au total</p><div class="shims">${[5,2,1].map(k=>`<span class="shim">${k} mm : ${s.all[k]}</span>`).join('')}</div><div class="gridwrap"><table class="measure-table"><thead><tr><th>Massif</th><th>Mesure</th><th>Calage</th><th>Composition</th></tr></thead><tbody>${s.rows.map(r=>`<tr><td>${esc(r.id)}</td><td>${r.delta>0?'+':''}${r.delta} mm</td><td>${r.thickness} mm</td><td>${r.pieces?([5,2,1].filter(k=>r.out[k]).map(k=>r.out[k]+'×'+k).join(' + ')):'Aucune cale'}</td></tr>`).join('')}</tbody></table></div></div>`}
+ const same=terrain.target===best.target;
+ res.innerHTML=`<div class="notice" style="margin-bottom:12px">Le zéro terrain sélectionné est <strong>${esc(zero.id)}</strong> (${zero.delta>0?'+':''}${zero.delta} mm). Le calcul cherche un plan cible commun au niveau du massif le plus haut ou au-dessus, car on ne peut que remonter les massifs. La plage de recherche est limitée à ${range} mm au-dessus du point le plus haut.</div><div class="compare">${card(terrain,'Solution A — zéro terrain / cible minimale',same)}${card(best,'Solution B — zéro optimisé',!same)}</div><p class="muted">Hypothèse actuelle : les cales de 5, 2 et 1 mm peuvent être empilées librement. Le calcul choisit le minimum de pièces pour chaque épaisseur et teste les niveaux entiers dans la plage indiquée. Les contraintes réelles de montage doivent être confirmées.</p>`;
+}
+function exportCSV(){if(!footings.length){alert('Aucun massif à exporter.');return;}let s=calcAt(Math.max(...footings.map(f=>f.delta)));let lines=[['Massif','Écart terrain (mm)','Épaisseur de calage (mm)','Cales 5 mm','Cales 2 mm','Cales 1 mm','Nombre de pièces'],...s.rows.map(r=>[r.id,r.delta,r.thickness,r.out[5],r.out[2],r.out[1],r.pieces])];let csv='\ufeff'+lines.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\r\n');download(csv,'recapitulatif_calage.csv','text/csv;charset=utf-8');}
+function exportProject(){let obj={version:1,mode,footings,nextId,searchRange:document.getElementById('searchRange').value,zero:document.getElementById('zeroSelect').value};download(JSON.stringify(obj,null,2),'projet_altimetrie.json','application/json');}
+function importProject(e){let file=e.target.files?.[0];if(!file)return;let r=new FileReader();r.onload=()=>{try{let o=JSON.parse(r.result);if(!Array.isArray(o.footings))throw new Error('Projet invalide');footings=o.footings.map(f=>({...f}));nextId=Number(o.nextId)||footings.length+1;selectedId=footings[0]?.id||null;document.getElementById('searchRange').value=o.searchRange??10;setMode(o.mode==='table'?'table':'plan');renderAll();}catch(err){alert('Impossible de lire ce projet JSON.');}};r.readAsText(file);}
+function download(data,name,type){let a=document.createElement('a');let u=URL.createObjectURL(new Blob([data],{type}));a.href=u;a.download=name;a.click();URL.revokeObjectURL(u);}
+const canvas=document.getElementById('planCanvas');canvas.addEventListener('click',ev=>{if(mode!=='plan'||!selectedId)return;let r=canvas.getBoundingClientRect();let x=Math.max(0,Math.min(100,(ev.clientX-r.left)/r.width*100));let y=Math.max(0,Math.min(100,(ev.clientY-r.top)/r.height*100));let f=footings.find(f=>f.id===selectedId);if(f){f.x=x;f.y=y;renderAll();}});
+generateGrid();
+</script>
+</body></html>
